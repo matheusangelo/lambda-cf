@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Main CloudFormation Template'
+
+Parameters:
+  VpcCIDR:
+    Type: String
+    Default: "10.0.0.0/16"
+  Subnet1CIDR:
+    Type: String
+    Default: "10.0.1.0/24"
+  Subnet2CIDR:
+    Type: String
+    Default: "10.0.2.0/24"
+
+Resources:
+  AppVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: AppVPC
+  AppSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AppVPC
+      CidrBlock: !Ref Subnet1CIDR
+      AvailabilityZone: "us-east-1a"
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: AppSubnet1
+  AppSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AppVPC
+      CidrBlock: !Ref Subnet2CIDR
+      AvailabilityZone: "us-east-1b"
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: AppSubnet2
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref AppVPC
+      GroupDescription: Allow all traffic
+      SecurityGroupIngress:
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: -1
+      Tags:
+        - Key: Name
+          Value: AppSecurityGroup
+  AppLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt AppLambdaExecutionRole.Arn
+      FunctionName: AppLambdaFunction
+      Runtime: python3.9
+      Code:
+        S3Bucket: app
+        S3Key: app.zip
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref AppSecurityGroup
+        SubnetIds:
+          - !Ref AppSubnet1
+          - !Ref AppSubnet2
+  AppLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "arn:aws:logs:*:*:*"
